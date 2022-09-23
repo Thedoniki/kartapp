@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>First map created with leaflet</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+    <!-- Make sure you put this AFTER Leaflet's CSS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+        integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+        crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css"
+        integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
+        crossorigin="">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <script src="http://mourner.github.io/simpleheat/simpleheat.js"></script>
+    <script src="http://leaflet.github.io/Leaflet.heat/src/HeatLayer.js"></script>
+
+<!-- Här skapar jag en input ruta för användarna, även en dropdown för tillgängliga destinationer(butiker) -->
+   <div class="container">
+        From City: <input type="text" id="txtFrom" value="Borlänge">
+        
+        To Store:<select id="txtTo">
+            <option>60.48146, 15.42003 Ikea Borlänge</option>
+            <option>67.84507, 20.25092 Rusta Kiruna</option>
+            <option>63.17620, 14.69338 Elgiganten Östersund </option>
+            <option>58.04260, 14.97002 Dressman Tranås</option>
+            <option>57.76081, 14.17751 Media Markt Jönköping</option>
+            <option>57.65052, 11.94549 Sängjätten Frölunda </option>
+            <option>59.33353, 18.07504 Louis Vuitton Stockholm</option>
+            <option>63.40195, 13.08036 Stadium Pulse Åre (Torget)</option>
+            <option>65.29710, 21.53575 Golfshopen Piteå (Södra Pitholmsvägen 7)</option>
+            <option>59.61050, 16.61961 Lindex Västerås (Hällagatan))</option>
+        </select><br>
+        Language:<select id="Language">
+            <option value="sv">Swedish</option>
+            <option value="en-US">English</option>
+            <option value="de">German</option>
+            <option value="fr">Franch</option>
+        </select><br>
+        <button onclick="showDrivingInstructions()" class="btn btn-primary">Show way to store</button>
+        <ul id="drivinginstructions"></ul>
+
+        <meta charset="utf-8">
+        <style>
+            #mapid {
+                height: 900px;
+                
+            }
+        </style>
+        </div>
+</head>
+
+<body>
+
+
+<!-- Här skapar jag en container för att på sidan visa vilka apier jag har använt men även olika funktioner som användaren kan ta del av på min map-->
+
+    <div class="container">
+        <div id="mapid"></div>
+        <ul id="Food">
+            <li>Click anywhere on the map to get available restaurants nearby</li>
+        </ul>
+        <ul id="Population">
+            <li>Click anywhere on the map to get number of inhabitants in chosen city in Sweden</li>
+        </ul>
+        <ul id="Search">
+            <li>Use the search bar function at the top of the page to get distance between 2 stores</li>
+        </ul>
+        <ul></ul>
+        <ul id="nextbus">
+            <li>Click any Circle to get next busdeparture from this bustop</li>
+        </ul>
+        <div><a href="https://docs.microsoft.com/en-us/bingmaps/rest-services/routes/local-insights">Bing local insights API</a></div>
+        <div><a href="https://openweathermap.org/api">Data retrieved from openweathermap</a></div>
+        <div><a href="https://www.trafiklab.se/">Data retrieved from trafiklab</a></div>
+    </div>
+    <script>
+      
+
+        
+
+        var mymap = L.map('mapid').setView([60.48447, 15.41812], 5);
+
+        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+                '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+                'Imagery  © <a href="https://www.mapbox.com/">Mapbox</a>',
+            id: 'mapbox.light'
+        }).addTo(mymap);
+            
+        L.control.scale().addTo(mymap);
+
+        mymap.on("click", function (e) {
+            shopsnearbyclicked(e);
+        });
+
+        let markersLayer = new L.LayerGroup().addTo(mymap);
+        function shopsnearbyclicked(e) {
+            let ul = $("ul");
+            ul.empty();
+            markersLayer.clearLayers();
+            let lat = e.latlng.lat;
+            let lng = e.latlng.lng;
+            $.getJSON("http://dev.virtualearth.net/REST/V1/Routes/LocalInsights?Waypoint=" + lat + "," + lng + "&&TravelMode=Driving&Optimize=time&MaxTime=10&TimeUnit=Minute&type=Pizza&key=AiX8p6h9lpxw5x2TRiWE4wHiTHi1XTYZC4-_r8c-l_lK49sfsW7XEDQihf3Dpk6d", function (result) {
+
+                let categoryTypeResultArray = result.resourceSets[0].resources[0].categoryTypeResults;
+                let markernumber = 0;
+                $.each(categoryTypeResultArray, function (index, categoryElement) {
+                    ul.append("<li><h3>" + categoryElement.categoryTypeSummary + "<h3></li>");
+                    $.each(categoryElement.entities, function (index2, entityElement) {
+
+                        let marker = L.marker([entityElement.latitude, entityElement.longitude]);
+
+                        marker.bindPopup(entityElement.entityName);
+                        marker.addTo(markersLayer);
+
+                        ul.append("<li class='btn btn-link' onclick='mymap.setView(new L." + marker.getLatLng() + "," + 16 + ");markersLayer.getLayers()[" + markernumber + "].openPopup();'>" + entityElement.entityName + "</li>");
+                        markernumber++;
+                    });
+                });
+            });
+
+        };
+
+        
+
+
+        var geojsonFeature = {
+
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "IKEA Borlänge (Montörsgatan) öppettider: 10.00 - 20.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.dt.se%2Fartikel%2Fikea-i-borlange-ar-invigt&psig=AOvVaw0jIhXUy6VBG67--USoT7Yi&ust=1617819401590000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCMCKuYmd6u8CFQAAAAAdAAAAABAN/'>Bild på Ikea</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            15.421135425567625,
+                            60.48169116540169
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Rusta Kiruna (Österleden), öppettider : 10.00 - 20.00",
+                        "urllink": "<a href=' https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.fastighetsmastaren.com%2Fpremiar-for-rusta-i-kiruna%2F&psig=AOvVaw2cbE-PmLjS1f3b9x4de2rj&ust=1617819731890000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCNDJ3qWe6u8CFQAAAAAdAAAAABAD/'>Bild på Rusta</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            20.250849723815914,
+                            67.84509101476806
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Elgiganten Östersund (Hagvägen 1B), öppettider : 10.00 - 20.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.elgiganten.se%2Fstores%2Fvastra-gotalands-lan%2Ftrollhattan%2Ftrollhattan&psig=AOvVaw1IKo-53_Lu9GPfdCz343tk&ust=1617818897836000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCJDKjpib6u8CFQAAAAAdAAAAABAD/'>Bild på Elgiganten</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            14.693344831466673,
+                            63.176381971769075
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Dressman Tranås (Storgatan 41A), öppettider : 10.00 - 19.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Flindenkopcentrum.se%2Fbutiker%2Fdressmann%2F&psig=AOvVaw0m9m7LoS2DEMky4vPpOVGq&ust=1617818950453000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCODuubGb6u8CFQAAAAAdAAAAABAD/'>Bild på Dressman</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            14.975481033325194,
+                            58.03498499537878
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Media Markt Jönköping (Solåsvägen) öppettider : 10.00 - 20.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.rusta.com%2Fse%2Fsv%2Fmenu%2Frusta-today%2F&psig=AOvVaw2QQk_4YuNOfguENgv10ciZ&ust=1617818801251000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCPj6t-qa6u8CFQAAAAAdAAAAABAD/'>Bild på Media markt</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            14.17786180973053,
+                            57.76105595306145
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Sängjätten Frölunda (Lona Knapes Gata), öppettider : 11.00 - 20.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.sangjatten.se%2Fbutiker%2Fkarlstad%2Fsangjatten-karlstad&psig=AOvVaw066urHqv3YsNlDaF7xsTTM&ust=1617818657613000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCMi8o6aa6u8CFQAAAAAdAAAAABAD/'>Bild på Sängjätten</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            11.946094930171967,
+                            57.650689747628284
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Louis Vuitton Stockholm (Birger Jarlsgatan), öppettider : 10.00 - 18.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=https%3A%2F%2Feu.louisvuitton.com%2Feng-e1%2Fpoint-of-sale%2Fsweden%2Flouis-vuitton-stockholm&psig=AOvVaw0wbOYOoFULnhjLr5WLoLu5&ust=1617818852043000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCOjzgYKb6u8CFQAAAAAdAAAAABAE/'>Bild på Louis Vuitton</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            18.07487279176712,
+                            59.33364771912117
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Stadium Pulse Åre (Torget), öppettider : 09.00 - 19.00",
+                        "urllink": "<a href=' https://unitedbloggers.no/uploads/sites/267/2016/09/stadium_pulse.jpg/'>Bild på Stadium</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            13.080189228057861,
+                            63.399564778337464
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Golfshopen Piteå (Södra Pitholmsvägen 7), öppettider : 07-00 - 22.00",
+                        "urllink": "<a href='https://www.google.com/url?sa=i&url=http%3A%2F%2Fwww.luleagolf.se%2Flulea-gk%2F&psig=AOvVaw3S5KjMtyMDraaNF4tdPgsH&ust=1617819672320000&source=images&cd=vfe&ved=0CAIQjRxqFwoTCIi0xIme6u8CFQAAAAAdAAAAABAD/'>Bild på Golfshopen</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            21.519840359687805,
+                            65.29843597997444
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "name": "Lindex Västerås (Hällagatan), öppettider : 10.00 - 19.00",
+                        "urllink": "<a href='http://www.market.se/sites/default/files/styles/og_image/public/images/lindex-store-mall-of-scandinavia.jpg?h=6550c266&itok=t1F3Ws15/'>Bild på Lindex</a>"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            16.62059783935547,
+                            59.61073054216134
+                        ]
+                    }
+                }
+            ]
+        }
+
+        
+        function myForEachFeature(feature, layer) {
+            if (feature.properties) {
+                popmsg = feature.properties.name + "<br>";
+                popmsg += feature.properties.urllink;
+                layer.bindPopup(popmsg);
+            }
+        }
+        L.geoJSON(geojsonFeature, {
+            onEachFeature: myForEachFeature
+        }).addTo(mymap);
+
+
+
+
+
+
+        mymap.on("click", function (event) {
+            let latLngObj = event.latlng;
+            let lat = latLngObj.lat.toFixed(1);//get lat where u click
+            let lng = latLngObj.lng.toFixed(1); // get long where u click
+            let url = "http://api.openweathermap.org/data/2.5/weather?lat=" + lat + "&lon=" + lng + "&units=metric&appid=aa074e7cd490aa3bfd5b055bfd7c0e0a";
+
+            $.getJSON(url, function (jsondata) {
+                createWeatherPopUp(latLngObj, jsondata);
+            });
+        });
+
+        function createWeatherPopUp(latlngObj, jsondata) {
+            let popup = L.popup();
+            popup.setLatLng(latlngObj);
+            let tempMsg = "<img src='http://openweathermap.org/img/w/" + jsondata.weather[0].icon + ".png'><br>";
+            tempMsg += "In <b>" + jsondata.name + "</b></br>";
+            tempMsg += " it's <b>" + jsondata.weather[0].description + "</b><br>";
+            tempMsg += " and the temp is <b>" + jsondata.main.temp + " &#8451";
+
+            popup.setContent(tempMsg);
+            popup.openOn(mymap);
+            map.setView(latlngObj, 12);
+
+        }
+
+
+        
+
+        var busstop = [
+            [60.48146, 15.42003],
+            [67.84507, 20.25092],
+            [63.17620, 14.69338],
+            [58.04260, 14.97002],
+            [57.76081, 14.17751],
+            [57.65052, 11.94549],
+            [59.33353, 18.07504],
+            [63.40195, 13.08036],
+            [65.29710, 21.53575],
+            [59.61050, 16.61961],
+        ];
+
+
+        for (i = 0; i < busstop.length; i++) {
+            $.getJSON("https://api.resrobot.se/v2/location.nearbystops?key=11f4e3cb-3eb4-4223-93a2-ccb6cf0dcccb&originCoordLat=" + busstop[i][0] + "&originCoordLong=" + busstop[i][1] + "&format=json", function (data) {
+                $.each(data.StopLocation, function (idx, element) {
+                    let circle = L.circle([element.lat, element.lon]).addTo(mymap);
+                    circle.on('click', function (e) {
+                        let deptTime = "";
+
+                        $.getJSON("https://api.resrobot.se/v2/departureBoard?key=405643b1-b585-4c61-8aeb-4b2311870126&id=" + element.id + "&maxJourneys=1&format=json", function (data) {
+
+                            deptTime = data.Departure[0].Stops.Stop[0].depTime;
+                            busstopName = data.Departure[0].Stops.Stop[0].name;
+                            document.getElementById("nextbus").innerHTML += "<li>" + busstopName + " kl " + deptTime + "</li>";
+
+
+                        });
+
+                    });
+                });
+            });
+        }
+        
+        
+        let numberOfInhabitants = [
+            [975551, "Stockholm", 59.32330, 18.06769],
+            [583056, "Göteborg", 57.70337, 12.01131],
+            [347949, "Malmö", 55.59207, 13.08923],
+            [233839, "Uppsala", 59.86794, 17.70816],
+            [164616, "Linköping", 58.39995, 15.68032],
+            [156381, "Örebro", 59.28042, 15.17725],
+            [155551, "Västerås", 59.61948, 16.61243],
+            [149280, "Helsingborg", 56.01514, 12.70540],
+            [143478, "Norrköping", 58.59789, 16.18844],
+            [142427, "Jönköping", 57.76749, 14.13645],
+        ];
+        let numberOfInhabitantsSorted = numberOfInhabitants.sort(function (a, b) { return a[0] - b[0] });
+        let max = numberOfInhabitantsSorted[numberOfInhabitantsSorted.length - 1][0];
+
+        let hotspots = [];
+
+        $.each(numberOfInhabitantsSorted, function (index, element) {
+            let nor = element[0] / max;
+
+            hotspots.push([element[2], element[3], nor.toFixed(2)]);
+        });
+
+        var myheat = L.heatLayer(hotspots, { radius: 80 }).addTo(mymap);
+        myheat.bindPopup("Populationsantal");
+
+        hotspots.forEach(function (element, index) {
+            L.marker([element[0], element[1]]).addTo(mymap)
+                .bindPopup("Plats : " + numberOfInhabitantsSorted[index][1] + ",  Antal Invånare: " + numberOfInhabitantsSorted[index][0]);
+        });
+
+
+
+
+
+        let routePolyLineLayer = new L.LayerGroup().addTo(mymap);
+        let markerLayer = new L.LayerGroup().addTo(mymap);
+        let LatLngArrayForItineraryItems = [];
+
+        function showDrivingInstructions() {
+            let fromCity = $("#txtFrom").val();
+            let toStore = $("#txtTo").val();
+            let language = $("#slctLanguage").val();
+            let ul = $("#drivinginstructions");
+            ul.empty();
+            routePolyLineLayer.clearLayers();
+            markerLayer.clearLayers();
+            LatLngArrayForItineraryItems = [];
+            $.getJSON("http://dev.virtualearth.net/REST/V1/Routes/Driving?wp.0=" + fromCity + "&wp.1=" + toStore + "&avoid=minimizeTolls&c=" + language + "&key=AiX8p6h9lpxw5x2TRiWE4wHiTHi1XTYZC4-_r8c-l_lK49sfsW7XEDQihf3Dpk6d", function (jsondata) {
+                let routesInfo = jsondata.resourceSets[0].resources[0].routeLegs[0];
+                let itineraryItemsArray = routesInfo.itineraryItems;
+                let distanceKm = routesInfo.travelDistance;
+                let travelTimeInMinutes = routesInfo.travelDuration / 60;
+                ul.append("<li>Distance: " + distanceKm + " Km</li>");
+                ul.append("<li>Time: " + travelTimeInMinutes.toFixed(0) + "minutes</li>");
+                $.each(itineraryItemsArray, function (index, itineraryItemElement) {
+                    let drivinginstruction = itineraryItemElement.instruction.text;
+                    ul.append("<li>" + drivinginstruction + "</li>");
+                    let maneuverpointCoordinates = itineraryItemElement.maneuverPoint.coordinates
+                    let lat = maneuverpointCoordinates[0];
+                    let lng = maneuverpointCoordinates[1];
+                    let lngLatObject = new L.latLng(lat, lng);
+                    let marker = new L.Marker(lngLatObject);
+                    marker.bindPopup(drivinginstruction);
+                    marker.addTo(markerLayer);
+                    LatLngArrayForItineraryItems.push(lngLatObject);;
+                });
+
+                showLinesBetweenItineraryItemsOnPolyLineLayer();
+
+            });
+        }
+
+        function showLinesBetweenItineraryItemsOnPolyLineLayer() {
+            let firstpolyline = new L.Polyline(LatLngArrayForItineraryItems, {
+                color: 'red',
+                weight: 5,
+                opacity: 0.5,
+                smoothFactor: 1
+            });
+            firstpolyline.addTo(routePolyLineLayer);
+        }
+
+
+
+
+
+
+</script>
+
+</body>
+</html>
